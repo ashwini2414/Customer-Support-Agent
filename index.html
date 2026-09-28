@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SupportMind: Support Agent with Memory</title>
+<style>
+:root{--brand:#4f46e5;--b2:#06b6d4;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--soft:#f8fafc}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:#fff;color:var(--ink)}
+header{padding:18px 32px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px}
+.logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--b2));display:grid;place-items:center;font-size:21px}
+header h1{margin:0;font-size:20px}header p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.badge{margin-left:auto;font-size:12px;padding:6px 12px;border-radius:999px;background:#eef2ff;color:var(--brand);font-weight:600}
+main{max-width:1150px;margin:20px auto;padding:0 24px}
+.picker{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.pill{border:1px solid var(--line);border-radius:14px;padding:9px 16px;cursor:pointer}
+.pill small{display:block;color:var(--muted);font-size:11px}
+.pill.active{border-color:var(--brand);background:#eef2ff}
+.grid{display:grid;grid-template-columns:1.6fr 1fr;gap:20px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.card{border:1px solid var(--line);border-radius:18px;box-shadow:0 4px 18px rgba(15,23,42,.05);overflow:hidden}
+.head{padding:13px 18px;border-bottom:1px solid var(--line);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+#chat{height:400px;overflow-y:auto;padding:16px;background:var(--soft)}
+.msg{max-width:85%;padding:10px 14px;border-radius:16px;margin:8px 0;line-height:1.55;font-size:14.5px}
+.user{background:var(--brand);color:#fff;margin-left:auto}
+.agent{background:#fff;border:1px solid var(--line)}
+.sys{text-align:center;color:var(--muted);font-size:13px;margin:30px 10px}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}
+.col{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;font-size:14px;line-height:1.5}
+.col h4{margin:0}.col .sub{margin:2px 0 8px;font-size:12px;color:var(--muted)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px 0}
+.chip{font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.chip:hover{background:#eef2ff}
+.input{display:flex;gap:8px;padding:12px 16px 16px}
+.input input{flex:1;padding:11px 13px;border:1px solid var(--line);border-radius:12px;font-size:14.5px}
+.input button{padding:0 18px;border:0;border-radius:12px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
+.input button.alt{background:var(--b2)}
+.status{font-size:12px;padding:5px 11px;border-radius:999px;background:#f1f5f9;color:var(--muted);font-weight:600}
+.status.on{background:#dcfce7;color:#16a34a}
+#mem{padding:14px;height:250px;overflow-y:auto}
+.mem{border-left:3px solid var(--b2);background:var(--soft);padding:9px 11px;border-radius:8px;margin-bottom:9px;font-size:13.5px}
+.empty{color:var(--muted);text-align:center;margin-top:50px;font-size:13.5px;line-height:1.6}
+.bar{padding:0 14px 14px}
+.bar button{width:100%;padding:10px;border:1px solid var(--brand);background:#eef2ff;color:var(--brand);border-radius:12px;font-weight:600;cursor:pointer}
+#brief{margin-top:10px;font-size:13.5px;line-height:1.6;white-space:pre-wrap}
+.count{padding:0 14px 12px;font-size:12.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header><div class="logo">🎧</div><div><h1>SupportMind</h1><p>A customer support agent that remembers every customer</p></div><div class="badge">Powered by Hindsight Memory</div></header>
+<main>
+<div class="picker" id="picker"></div>
+<div class="grid">
+ <div class="card">
+  <div class="head"><span>💬 Live Support Chat</span><span id="who" class="status"></span></div>
+  <div id="chat"></div>
+  <div class="chips" id="chips"></div>
+  <div class="input"><input id="msg" placeholder="Describe your issue..." autocomplete="off"><button onclick="send()">Send</button><button class="alt" onclick="compare()">⚖ Compare</button></div>
+ </div>
+ <div class="card">
+  <div class="head"><span>🧠 Agent Memory</span><span id="ms" class="status">Waiting</span></div>
+  <div id="mem"><div class="empty">Recalled memories<br>appear here.</div></div>
+  <div class="count" id="count">Total memories recalled this session: 0</div>
+  <div class="bar"><button onclick="briefing()">📋 Generate customer briefing</button><div id="brief"></div></div>
+ </div>
+</div>
+</main>
+<script>
+const customers={cust_priya:{n:"Priya Sharma",t:"Returning customer"},cust_ramesh:{n:"Ramesh Kumar",t:"Returning customer"},cust_ananya:{n:"Ananya Reddy",t:"Returning customer"},new:{n:"New Customer",t:"No history"}};
+const chips=["My wifi is slow","My internet keeps dropping","I was charged twice","My TV app won't connect"];
+let selected="cust_priya",newId="cust_new_"+Date.now(),total=0;
+const cur=()=>selected==="new"?newId:selected;
+const esc=t=>t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const fmt=t=>esc(t).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/\s(\d+)\.\s(?=<b>)/g,"<br>$1. ");
+const clean=l=>[...new Set((l||[]).map(m=>m.split(" | ")[0].trim()))].slice(0,5);
+async function call(id,message){const r=await fetch("/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({customer_id:id,message})});return r.json();}
+function picker(){const p=document.getElementById("picker");p.innerHTML="";Object.entries(customers).forEach(([id,c])=>{const b=document.createElement("div");b.className="pill"+(id===selected?" active":"");b.innerHTML="<b>"+c.n+"</b><small>"+c.t+"</small>";b.onclick=()=>choose(id);p.appendChild(b);});}
+function choose(id){selected=id;if(id==="new")newId="cust_new_"+Date.now();picker();
+ document.getElementById("who").textContent=customers[id].n;
+ document.getElementById("chat").innerHTML='<div class="sys">Chatting as <b>'+customers[id].n+'</b>. Pick a question or type your own.</div>';
+ document.getElementById("mem").innerHTML='<div class="empty">Recalled memories<br>appear here.</div>';
+ document.getElementById("brief").textContent="";const s=document.getElementById("ms");s.textContent="Waiting";s.className="status";}
+function showMem(list){const c=clean(list),s=document.getElementById("ms"),b=document.getElementById("mem");total+=c.length;
+ document.getElementById("count").textContent="Total memories recalled this session: "+total;
+ if(c.length){s.textContent=c.length+" memories recalled";s.className="status on";b.innerHTML=c.map(m=>'<div class="mem">'+esc(m)+'</div>').join("");}
+ else{s.textContent="No history, generic reply";s.className="status";b.innerHTML='<div class="empty">🆕 First-time customer.<br>No memories found, so the reply is generic.</div>';}}
+function prep(){const ch=document.getElementById("chat");if(ch.querySelector(".sys"))ch.innerHTML="";return ch;}
+async function send(text){const inp=document.getElementById("msg"),m=(text||inp.value).trim();if(!m)return;inp.value="";
+ const ch=prep();ch.innerHTML+='<div class="msg user">'+esc(m)+'</div><div id="ty" class="sys" style="margin:8px">Agent is checking memory…</div>';ch.scrollTop=ch.scrollHeight;
+ try{const d=await call(cur(),m);document.getElementById("ty").remove();ch.innerHTML+='<div class="msg agent">'+fmt(d.reply)+'</div>';showMem(d.recalled_memories);}
+ catch(e){document.getElementById("ty").remove();ch.innerHTML+='<div class="msg agent">Something went wrong. Please try again.</div>';}
+ ch.scrollTop=ch.scrollHeight;}
+async function compare(){const inp=document.getElementById("msg"),m=inp.value.trim()||"My internet keeps dropping";inp.value="";
+ const rid=selected==="new"?"cust_priya":selected,ch=prep();
+ ch.innerHTML+='<div class="msg user">'+esc(m)+'</div><div id="ty" class="sys" style="margin:8px">Comparing new vs returning customer…</div>';ch.scrollTop=ch.scrollHeight;
+ try{const[a,b]=await Promise.all([call("cust_new_"+Date.now(),m),call(rid,m)]);document.getElementById("ty").remove();
+  ch.innerHTML+='<div class="cmp"><div class="col"><h4>🆕 New customer</h4><p class="sub">No history</p>'+fmt(a.reply)+'</div><div class="col"><h4>⭐ '+customers[rid].n+'</h4><p class="sub">'+clean(b.recalled_memories).length+' memories recalled</p>'+fmt(b.reply)+'</div></div>';
+  showMem(b.recalled_memories);}catch(e){document.getElementById("ty").remove();}
+ ch.scrollTop=ch.scrollHeight;}
+async function briefing(){const b=document.getElementById("brief");b.textContent="Reading memory…";
+ try{const r=await fetch("/briefing",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({customer_id:cur()})});const d=await r.json();b.textContent=d.briefing.replace(/\*\*/g,"");}catch(e){b.textContent="Could not load briefing.";}}
+document.getElementById("chips").innerHTML=chips.map(c=>'<span class="chip" onclick="send(\''+c.replace(/'/g,"\\'")+'\')">'+c+'</span>').join("");
+document.getElementById("msg").addEventListener("keypress",e=>{if(e.key==="Enter")send();});
+choose("cust_priya");
+</script>
+</body>
+</html>
